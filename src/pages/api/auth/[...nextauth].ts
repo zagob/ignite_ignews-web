@@ -29,6 +29,40 @@ export default NextAuth({
   session: { strategy: "jwt" },
   secret: process.env.JWT_SIGNING_PRIVATE_KEY,
   callbacks: {
+    async session<Session>({ session }) {
+      try {
+        const userActiveSubscription = await fauna.query(
+          query.Get(
+            query.Intersection([
+              query.Match(
+                query.Index("subscription_by_user_ref"),
+                query.Select(
+                  "ref",
+                  query.Get(
+                    query.Match(
+                      query.Index("user_by_email"),
+                      query.Casefold(session.user.email)
+                    )
+                  )
+                )
+              ),
+              // query.Match(query.Index("subscription_by_status"), "active"),
+            ])
+          )
+        );
+
+        return {
+          ...session,
+          activeSubscription: userActiveSubscription,
+        };
+      } catch (err) {
+        return {
+          ...session,
+          erro: err,
+          activeSubscription: null,
+        };
+      }
+    },
     async signIn({ user, account, profile }: SignInProps): Promise<boolean> {
       const { email } = user;
 
@@ -54,7 +88,7 @@ export default NextAuth({
         );
 
         return true;
-      } catch(err) {
+      } catch (err) {
         return false;
       }
     },
